@@ -10,8 +10,12 @@ import threading
 import itertools
 from utils import logger
 
+# Использовать прокси или нет?
 USE_PROXY = False
-MAX_THREADS = 4
+# Кол-во потоков
+MAX_THREADS = 2
+# Пауза между отправкой аккаунтов в работу
+SLEEP_BETWEEN_ACC = [2, 8]
 
 
 
@@ -188,7 +192,7 @@ def main():
             logger.error(f"Автоматизация и разработка by QUANTUM LAB | Telegram-канал: @quantumlab_official | Продукты: @quantum_lab_bot")
             proxy = next(proxy_cycle)
             futures.append(executor.submit(thread_wrapper, email, proxy))
-            time.sleep(random.randint(3,10))
+            time.sleep(random.randint(*SLEEP_BETWEEN_ACC))
 
         for future in concurrent.futures.as_completed(futures):
             try:
