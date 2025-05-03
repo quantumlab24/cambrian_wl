@@ -10,12 +10,9 @@ import threading
 import itertools
 from utils import logger
 
-# Использовать прокси или нет?
 USE_PROXY = False
-# Кол-во потоков
-MAX_THREADS = 2
-# Пауза между отправкой аккаунтов в работу
-SLEEP_BETWEEN_ACC = [2, 8]
+MAX_THREADS = 4
+
 
 
 
@@ -39,6 +36,51 @@ def get_chrome_user_agent():
     version = random.randint(132, 136)
     return f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version}.0.0.0 Safari/537.36"
 
+
+def format_proxy(proxy: str) -> dict:
+    try:
+        SUPPORTED_PROTOCOLS = ['http', 'https', 'socks5']
+
+        if not any(proxy.startswith(f"{protocol}://") for protocol in SUPPORTED_PROTOCOLS):
+            proxy = f"http://{proxy}"
+
+        protocol = None
+        for p in SUPPORTED_PROTOCOLS:
+            if proxy.startswith(f"{p}://"):
+                protocol = p
+                proxy = proxy.replace(f"{p}://", '')
+                break
+
+        if protocol is None:
+            raise ValueError(f"Unsupported proxy protocol. Supported protocols: {', '.join(SUPPORTED_PROTOCOLS)}")
+
+        if '@' in proxy:
+            auth, host_port = proxy.split('@')
+            username, password = auth.split(':')
+            host, port = host_port.split(':')
+        else:
+            host, port = proxy.split(':')
+            username = password = None
+
+        try:
+            port = int(port)
+            if not (1 <= port <= 65535):
+                raise ValueError(f"Invalid port number: {port}")
+        except ValueError as e:
+            raise ValueError(f"Invalid port format: {port}")
+
+        proxy_dict = {
+            "server": f"{protocol}://{host}:{port}"
+        }
+
+        if username and password:
+            proxy_dict["username"] = username
+            proxy_dict["password"] = password
+
+        return proxy_dict
+    except Exception as e:
+        raise ValueError(f"Invalid proxy format: {proxy}. Error: {str(e)}")
+
 async def run(email, proxy=None):
     success_results = []
     error_results = []
@@ -51,7 +93,10 @@ async def run(email, proxy=None):
     }
 
     if proxy is not None:
-        launch_args["proxy"] = {"server": proxy}
+        try:
+            launch_args["proxy"] = format_proxy(proxy)
+        except Exception as e:
+            logger.error(f"Failed to configure proxy: {e}")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(**launch_args)
@@ -143,7 +188,7 @@ def main():
             logger.error(f"Автоматизация и разработка by QUANTUM LAB | Telegram-канал: @quantumlab_official | Продукты: @quantum_lab_bot")
             proxy = next(proxy_cycle)
             futures.append(executor.submit(thread_wrapper, email, proxy))
-            time.sleep(random.randint(*SLEEP_BETWEEN_ACC))
+            time.sleep(random.randint(3,10))
 
         for future in concurrent.futures.as_completed(futures):
             try:
